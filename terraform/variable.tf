@@ -51,3 +51,9 @@ variable "key_name" {
   type        = string
   default     = "user1"
 }
+# rds
+variable "db_password" {
+  description = "Master password for the MySQL RDS database"
+  type        = string
+  sensitive   = true
+}
