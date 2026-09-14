@@ -1,0 +1,36 @@
+# Terraform local files, state, and provider binaries
+*.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+*.tfplan
+*.tfplan.*
+build/
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Environment and sensitive credentials
+.env
+*.pem
+*.key
+secrets/
+
+# Backup files and archives
+*.bak
+*.backup
+backup/
+*.zip
+*.tar.gz
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE and editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
