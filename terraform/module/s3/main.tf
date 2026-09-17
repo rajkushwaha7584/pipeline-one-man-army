@@ -1,0 +1,1 @@
+# we will make sure to create an S3 bucket with the necessary configurations and permissions. The Terraform module will define the bucket, its properties, and any associated resources such as IAM policies or lifecycle rules.
