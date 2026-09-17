@@ -34,3 +34,12 @@ module "rds" {
   private_subnet_ids = module.vpc.private_subnet_ids
   db_password        = var.db_password # Define this in your root variables.tf or tfvars
 }
+
+# alb_asg
+module "alb_asg" {
+  source            = "./module/alb_asg"
+  project_name      = var.project_name
+  environment       = var.environment
+  vpc_id            = module.vpc.vpc_id
+  public_subnet_ids = module.vpc.public_subnet_ids
+}
