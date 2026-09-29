@@ -23,15 +23,15 @@ output "ec2_public_ip" {
   value       = module.ec2.instance_public_ip
 }
 # RDS
-output "db_instance_endpoint" {
-  description = "The connection endpoint for the MySQL RDS database"
-  value       = module.rds.db_instance_endpoint
-}
+# output "db_instance_endpoint" {
+#   description = "The connection endpoint for the MySQL RDS database"
+#   value       = module.rds.db_instance_endpoint
+# }
 
-output "db_name" {
-  description = "The name of the database"
-  value       = module.rds.db_name
-}
+# output "db_name" {
+#   description = "The name of the database"
+#   value       = module.rds.db_name
+# }
 # alb_asg
 # output "alb_dns_name" {
 #   value = module.alb_asg.alb_dns_name
