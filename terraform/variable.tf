@@ -47,13 +47,8 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "SSH key pair name for EC2"
+  description = "Optional name of an existing EC2 SSH key pair"
   type        = string
-  default     = "user1"
-}
-# rds
-variable "db_password" {
-  description = "Master password for the MySQL RDS database"
-  type        = string
-  sensitive   = true
+  default     = null
+  nullable    = true
 }

@@ -1,0 +1,50 @@
+name: "Infrastructure Destroy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destruction:
+        description: 'Type "yes-destroy" to execute teardown'
+        required: true
+        default: 'no'
+        type: string
+
+jobs:
+  terraform-destroy:
+    name: "Terraform Destroy"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.15.1"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Safety Verification
+        run: |
+          if [ "${{ github.event.inputs.confirm_destruction }}" != "yes-destroy" ]; then
+            echo "Error: Safety confirmation text did not match. Aborting destroy."
+            exit 1
+          fi
+
+      - name: Review destroy plan
+        run: terraform plan -destroy -input=false -no-color
+
+      - name: Terraform Destroy Execution
+        run: terraform destroy -auto-approve -input=false -no-color

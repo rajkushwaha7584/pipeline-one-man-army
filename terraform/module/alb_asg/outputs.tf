@@ -1,7 +1,2 @@
-output "alb_dns_name" {
-  value = aws_lb.this.dns_name
-}
-
-output "target_group_arn" {
-  value = aws_lb_target_group.this.arn
-}
+# This module is intentionally not active yet. Its resources are commented out
+# in main.tf, so outputs are omitted until those resources are enabled.

@@ -25,9 +25,10 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "SSH key pair name"
+  description = "Optional name of an existing EC2 SSH key pair"
   type        = string
-  default     = "user1"
+  default     = null
+  nullable    = true
 }
 
 variable "enable_public_ip" {
