@@ -6,15 +6,19 @@ on:
       - main
       - terra
     paths:
-      - 'terraform/**'
+      - "terraform/**"
+      - ".github/workflows/tf-validate.yml"
   push:
     branches-ignore:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: "Validate & Format"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./terraform
@@ -26,22 +30,24 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.6.1"
+
+      - name: Show Terraform Version
+        run: terraform version
 
       - name: Check Terraform Formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -diff -recursive
 
       - name: Terraform Init
-        env:
-          TF_SKIP_PROVIDER_VERIFY: "true"
-        run: terraform init -backend=false -upgrade
+        run: terraform init -backend=false -input=false
 
       - name: Terraform Validate
-        run: terraform validate
+        run: terraform validate -no-color
 
   security-scan:
     name: "Security Scan (Trivy)"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -49,7 +55,7 @@ jobs:
       - name: Run Trivy Scanner on Terraform Code
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'config'
-          scan-dir: './terraform'
-          format: 'table'
-          exit-code: '0' # Set to '1' to fail on security issues
+          scan-type: "config"
+          scan-ref: "./terraform"
+          format: "table"
+          exit-code: "0"
