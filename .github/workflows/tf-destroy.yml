@@ -1,49 +1,49 @@
-# name: "3. Infra - Destroy"
+name: "3. Infra - Destroy"
 
-# on:
-#   workflow_dispatch:
-#     inputs:
-#       confirm_destruction:
-#         description: 'Type "yes-destroy" to execute teardown'
-#         required: true
-#         default: 'no'
-#         type: string
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destruction:
+        description: 'Type "yes-destroy" to execute teardown'
+        required: true
+        default: 'no'
+        type: string
 
-# jobs:
-#   terraform-destroy:
-#     name: "Terraform Destroy"
-#     runs-on: ubuntu-latest
-#     defaults:
-#       run:
-#         working-directory: ./terraform
+jobs:
+  terraform-destroy:
+    name: "Terraform Destroy"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
 
-#     steps:
-#       - name: Checkout Repository
-#         uses: actions/checkout@v4
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-#       - name: Setup Terraform
-#         uses: hashicorp/setup-terraform@v3
-#         with:
-#           terraform_version: "1.6.0"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
 
-#       - name: Configure AWS Credentials
-#         uses: aws-actions/configure-aws-credentials@v4
-#         with:
-#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#           aws-region: ap-south-1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
 
-#       - name: Terraform Init
-#         run: terraform init
+      - name: Terraform Init
+        run: terraform init
 
-#       - name: Safety Verification
-#         run: |
-#           if [ "${{ github.event.inputs.confirm_destruction }}" != "yes-destroy" ]; then
-#             echo "Error: Safety confirmation text did not match. Aborting destroy."
-#             exit 1
-#           fi
+      - name: Safety Verification
+        run: |
+          if [ "${{ github.event.inputs.confirm_destruction }}" != "yes-destroy" ]; then
+            echo "Error: Safety confirmation text did not match. Aborting destroy."
+            exit 1
+          fi
 
-#       - name: Terraform Destroy Execution
-#         run: terraform destroy -auto-approve -no-color
-#         env:
-#           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      - name: Terraform Destroy Execution
+        run: terraform destroy -auto-approve -no-color
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
