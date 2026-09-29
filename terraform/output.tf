@@ -33,6 +33,6 @@ output "db_name" {
   value       = module.rds.db_name
 }
 # alb_asg
-output "alb_dns_name" {
-  value = module.alb_asg.alb_dns_name
-}
+# output "alb_dns_name" {
+#   value = module.alb_asg.alb_dns_name
+# }
