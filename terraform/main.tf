@@ -22,7 +22,7 @@ module "ec2" {
 }
 resource "aws_key_pair" "user1" {
   key_name   = "user1"
-  public_key = file("~/.ssh/user1.pub")
+  public_key = var.key_name
 }
 
 # Call the RDS Module
