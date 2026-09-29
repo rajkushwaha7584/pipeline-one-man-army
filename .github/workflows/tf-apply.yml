@@ -1,89 +1,89 @@
-name: "2. Infra - Apply"
+# name: "2. Infra - Apply"
 
-on:
-  push:
-    branches:
-      - main
-      - terra
-    paths:
-      - 'terraform/**'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target Environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
+# on:
+#   push:
+#     branches:
+#       - main
+#       - terra
+#     paths:
+#       - 'terraform/**'
+#   workflow_dispatch:
+#     inputs:
+#       environment:
+#         description: 'Target Environment'
+#         required: true
+#         default: 'dev'
+#         type: choice
+#         options:
+#           - dev
+#           - prod
 
-jobs:
-  terraform-plan:
-    name: "Terraform Plan"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./terraform
+# jobs:
+#   terraform-plan:
+#     name: "Terraform Plan"
+#     runs-on: ubuntu-latest
+#     defaults:
+#       run:
+#         working-directory: ./terraform
 
-    outputs:
-      plan_exitcode: ${{ steps.plan.outputs.exitcode }}
+#     outputs:
+#       plan_exitcode: ${{ steps.plan.outputs.exitcode }}
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.6.0"
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: "1.6.0"
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ap-south-1
 
-      - name: Terraform Init
-        run: terraform init
+#       - name: Terraform Init
+#         run: terraform init
 
-      - name: Terraform Plan
-        id: plan
-        continue-on-error: false
-        run: terraform plan -no-color -detailed-exitcode
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+#       - name: Terraform Plan
+#         id: plan
+#         continue-on-error: false
+#         run: terraform plan -no-color -detailed-exitcode
+#         env:
+#           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
 
-  terraform-apply:
-    name: "Terraform Apply"
-    needs: terraform-plan
-    runs-on: ubuntu-latest
-    environment: production
-    defaults:
-      run:
-        working-directory: ./terraform
+#   terraform-apply:
+#     name: "Terraform Apply"
+#     needs: terraform-plan
+#     runs-on: ubuntu-latest
+#     environment: production
+#     defaults:
+#       run:
+#         working-directory: ./terraform
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.6.0"
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: "1.6.0"
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ap-south-1
 
-      - name: Terraform Init
-        run: terraform init
+#       - name: Terraform Init
+#         run: terraform init
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve -no-color
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+#       - name: Terraform Apply
+#         run: terraform apply -auto-approve -no-color
+#         env:
+#           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
