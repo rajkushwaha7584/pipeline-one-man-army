@@ -32,6 +32,7 @@ output "ec2_public_ip" {
 #   description = "The name of the database"
 #   value       = module.rds.db_name
 # }
+
 # alb_asg
 # output "alb_dns_name" {
 #   value = module.alb_asg.alb_dns_name
