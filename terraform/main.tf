@@ -1,22 +1,59 @@
-# Call the VPC Module
 module "vpc" {
   source             = "./module/vpc"
   project_name       = var.project_name
   environment        = var.environment
   vpc_cidr           = var.vpc_cidr
   public_subnets     = var.public_subnets
-  private_subnets    = var.private_subnets
   availability_zones = var.availability_zones
 }
 
-# Call the EC2 Module
+module "ecr" {
+  source       = "./module/ecr"
+  project_name = var.project_name
+  environment  = var.environment
+}
+
+resource "random_password" "mysql_root" {
+  length  = 32
+  special = false
+}
+
+resource "random_password" "mysql_app" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "database" {
+  name                    = "${var.project_name}/${var.environment}/mysql"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "database" {
+  secret_id = aws_secretsmanager_secret.database.id
+  secret_string = jsonencode({
+    root_password = random_password.mysql_root.result
+    app_password  = random_password.mysql_app.result
+  })
+}
+
+module "iam" {
+  source              = "./module/iam"
+  project_name        = var.project_name
+  environment         = var.environment
+  database_secret_arn = aws_secretsmanager_secret.database.arn
+  ecr_repository_arns = module.ecr.repository_arns
+}
+
 module "ec2" {
-  source           = "./module/ec2"
-  project_name     = var.project_name
-  environment      = var.environment
-  vpc_id           = module.vpc.vpc_id
-  subnet_id        = module.vpc.public_subnet_ids[0] # Places EC2 in the first public subnet
-  instance_type    = var.instance_type
-  key_name         = var.key_name
-  enable_public_ip = true
+  source               = "./module/ec2"
+  project_name         = var.project_name
+  environment          = var.environment
+  vpc_id               = module.vpc.vpc_id
+  subnet_id            = module.vpc.public_subnet_ids[0]
+  instance_type        = var.instance_type
+  key_name             = var.key_name
+  iam_instance_profile = module.iam.instance_profile_name
+  database_secret_name = aws_secretsmanager_secret.database.name
+  mysql_volume_size    = var.mysql_volume_size
+  aws_region           = var.aws_region
 }

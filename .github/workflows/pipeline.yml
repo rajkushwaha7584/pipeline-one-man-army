@@ -1,0 +1,179 @@
+name: Application CI and Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Build and scan
+    runs-on: ubuntu-latest
+    env:
+      ENABLE_SNYK: ${{ vars.ENABLE_SNYK }}
+      ENABLE_SONAR: ${{ vars.ENABLE_SONAR }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare report directory
+        run: mkdir -p reports
+
+      - name: Install backend dependencies
+        working-directory: apps/backend
+        run: npm install --ignore-scripts
+
+      - name: Run backend tests
+        working-directory: apps/backend
+        run: npm test --if-present
+
+      - name: Audit backend dependencies
+        working-directory: apps/backend
+        continue-on-error: true
+        run: npm audit --json > ../../reports/npm-audit.json
+
+      - name: Build backend image
+        run: docker build -t one-man-army-backend:${{ github.sha }} apps/backend
+
+      - name: Build frontend image
+        run: docker build -t one-man-army-frontend:${{ github.sha }} apps/frontend
+
+      - name: Scan backend image with Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: one-man-army-backend:${{ github.sha }}
+          format: json
+          output: reports/backend-trivy.json
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+
+      - name: Scan frontend image with Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: one-man-army-frontend:${{ github.sha }}
+          format: json
+          output: reports/frontend-trivy.json
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+
+      - name: Run Snyk dependency scan
+        if: env.ENABLE_SNYK == 'true'
+        working-directory: apps/backend
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: npx --yes snyk test --json > ../../reports/snyk.json
+
+      - name: Run SonarCloud analysis
+        if: env.ENABLE_SONAR == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >-
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=apps
+
+      - name: Run OWASP ZAP baseline scan
+        if: env.APP_BASE_URL != ''
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ vars.APP_BASE_URL }}
+          artifact_name: zap-baseline-report
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  terraform-and-helm:
+    name: Validate infrastructure and chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.1
+
+      - name: Check Terraform formatting
+        working-directory: terraform
+        run: terraform fmt -check -diff -recursive
+
+      - name: Initialize Terraform without backend
+        working-directory: terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform
+        working-directory: terraform
+        run: terraform validate -no-color
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: Lint Helm chart
+        run: helm lint helm/three-tier
+
+      - name: Render Helm chart
+        run: helm template three-tier helm/three-tier --namespace three-tier
+
+  publish-reports:
+    name: Publish main-branch security report
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download reports
+        uses: actions/download-artifact@v4
+        with:
+          name: security-reports
+          path: public/reports
+          if-no-artifact-found: warn
+
+      - name: Build report index
+        run: |
+          mkdir -p public
+          printf '%s\n' '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Security scan reports</title><style>body{font:16px system-ui;max-width:900px;margin:48px auto;padding:0 20px;color:#202820}h1{font-size:28px}li{margin:12px 0}code{font-family:ui-monospace,monospace}</style><h1>Security scan reports</h1><p>Automated reports for the latest main-branch pipeline run.</p><ul>' > public/index.html
+          for file in public/reports/*; do
+            [ -f "$file" ] || continue
+            name=$(basename "$file")
+            printf '<li><a href="reports/%s">%s</a></li>\n' "$name" "$name" >> public/index.html
+          done
+          printf '%s\n' '</ul></html>' >> public/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

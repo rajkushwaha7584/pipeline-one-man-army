@@ -1,0 +1,2 @@
+const express=require('express');const mysql=require('mysql2/promise');const app=express();
+app.get('/api/health',async(_,res)=>{try{const db=await mysql.createConnection({host:process.env.DB_HOST,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:process.env.DB_NAME});await db.query('SELECT 1');await db.end();res.json({status:'ok'});}catch(e){res.status(503).json({status:'database-unavailable'});}});app.listen(process.env.PORT||8080);
