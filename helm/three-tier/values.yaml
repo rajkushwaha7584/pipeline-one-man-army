@@ -1,0 +1,7 @@
+images:
+  frontend: ""
+  backend: ""
+  tag: latest
+mysql:
+  storage: 20Gi
+  existingSecret: app-db
