@@ -32,8 +32,8 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "mysql" {
-  identifier             = "${var.project_name}-${var.environment}-mysql"
-  engine                 = "mysql"
+  identifier              = "${var.project_name}-${var.environment}-mysql"
+  engine                  = "mysql"
   engine_version          = "8.0"
   instance_class          = var.instance_class
   allocated_storage       = var.allocated_storage
@@ -45,7 +45,7 @@ resource "aws_db_instance" "mysql" {
   publicly_accessible     = false
   storage_encrypted       = true
   backup_retention_period = 7
-  skip_final_snapshot    = true
+  skip_final_snapshot     = true
 
   tags = {
     Name = "${var.project_name}-${var.environment}-mysql"
