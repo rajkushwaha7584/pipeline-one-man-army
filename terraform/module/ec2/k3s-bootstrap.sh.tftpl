@@ -23,6 +23,7 @@ until kubectl get nodes >/dev/null 2>&1; do sleep 5; done
 secret=$(aws secretsmanager get-secret-value --region ${aws_region} --secret-id ${database_secret_name} --query SecretString --output text)
 kubectl create namespace three-tier --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n three-tier create secret generic app-db \
+  --from-literal=db-host="$(jq -r .db_host <<< "$secret")" \
   --from-literal=root-password="$(jq -r .root_password <<< "$secret")" \
   --from-literal=app-password="$(jq -r .app_password <<< "$secret")" \
   --dry-run=client -o yaml | kubectl apply -f -

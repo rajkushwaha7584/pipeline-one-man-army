@@ -12,3 +12,8 @@ output "db_name" {
   description = "The name of the database"
   value       = aws_db_instance.mysql.db_name
 }
+
+output "db_address" {
+  description = "The hostname of the private MySQL RDS instance"
+  value       = aws_db_instance.mysql.address
+}

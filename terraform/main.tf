@@ -4,6 +4,7 @@ module "vpc" {
   environment        = var.environment
   vpc_cidr           = var.vpc_cidr
   public_subnets     = var.public_subnets
+  private_subnets    = var.private_subnets
   availability_zones = var.availability_zones
 }
 
@@ -28,14 +29,6 @@ resource "aws_secretsmanager_secret" "database" {
   recovery_window_in_days = 0
 }
 
-resource "aws_secretsmanager_secret_version" "database" {
-  secret_id = aws_secretsmanager_secret.database.id
-  secret_string = jsonencode({
-    root_password = random_password.mysql_root.result
-    app_password  = random_password.mysql_app.result
-  })
-}
-
 module "iam" {
   source              = "./module/iam"
   project_name        = var.project_name
@@ -56,4 +49,26 @@ module "ec2" {
   database_secret_name = aws_secretsmanager_secret.database.name
   mysql_volume_size    = var.mysql_volume_size
   aws_region           = var.aws_region
+  depends_on           = [aws_secretsmanager_secret_version.database]
+}
+
+module "rds" {
+  source             = "./module/rds"
+  project_name       = var.project_name
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  vpc_cidr           = var.vpc_cidr
+  private_subnet_ids = module.vpc.private_subnet_ids
+  db_name            = "skillpulse"
+  db_username        = "dbadmin"
+  db_password        = random_password.mysql_root.result
+}
+
+resource "aws_secretsmanager_secret_version" "database" {
+  secret_id = aws_secretsmanager_secret.database.id
+  secret_string = jsonencode({
+    db_host       = module.rds.db_address
+    app_password  = random_password.mysql_app.result
+    root_password = random_password.mysql_root.result
+  })
 }

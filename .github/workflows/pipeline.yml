@@ -22,32 +22,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          node-version: 22
+          go-version-file: apps/SkillPulse/backend/go.mod
 
       - name: Prepare report directory
         run: mkdir -p reports
 
-      - name: Install backend dependencies
-        working-directory: apps/backend
-        run: npm install --ignore-scripts
+      - name: Resolve Go dependencies
+        working-directory: apps/SkillPulse/backend
+        run: go mod tidy
 
       - name: Run backend tests
-        working-directory: apps/backend
-        run: npm test --if-present
+        working-directory: apps/SkillPulse/backend
+        run: go test ./...
 
-      - name: Audit backend dependencies
-        working-directory: apps/backend
-        continue-on-error: true
-        run: npm audit --json > ../../reports/npm-audit.json
+      - name: Vet backend
+        working-directory: apps/SkillPulse/backend
+        run: go vet ./...
 
       - name: Build backend image
-        run: docker build -t one-man-army-backend:${{ github.sha }} apps/backend
+        run: docker build -t one-man-army-backend:${{ github.sha }} apps/SkillPulse/backend
 
       - name: Build frontend image
-        run: docker build -t one-man-army-frontend:${{ github.sha }} apps/frontend
+        run: docker build -f apps/SkillPulse/Dockerfile.frontend -t one-man-army-frontend:${{ github.sha }} apps/SkillPulse
 
       - name: Scan backend image with Trivy
         uses: aquasecurity/trivy-action@0.33.1
@@ -67,13 +66,19 @@ jobs:
           exit-code: "1"
           severity: HIGH,CRITICAL
 
+      - name: Set up Node.js for Snyk CLI
+        if: env.ENABLE_SNYK == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Run Snyk dependency scan
         if: env.ENABLE_SNYK == 'true'
-        working-directory: apps/backend
+        working-directory: apps/SkillPulse/backend
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: npx --yes snyk test --json > ../../reports/snyk.json
+        run: npx --yes snyk test --file=go.mod --json > ../../../reports/snyk.json
 
       - name: Run SonarCloud analysis
         if: env.ENABLE_SONAR == 'true'
@@ -85,7 +90,27 @@ jobs:
           args: >-
             -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
-            -Dsonar.sources=apps
+            -Dsonar.sources=apps/SkillPulse
+
+      - name: Publish images to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PUBLISH_IMAGES == 'true'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "Set DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets before enabling PUBLISH_IMAGES." >&2
+            exit 1
+          fi
+          echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          for component in backend frontend; do
+            local_image="one-man-army-${component}:${GITHUB_SHA}"
+            remote_image="${DOCKERHUB_USERNAME}/skillpulse-${component}"
+            docker tag "$local_image" "${remote_image}:${GITHUB_SHA}"
+            docker tag "$local_image" "${remote_image}:latest"
+            docker push "${remote_image}:${GITHUB_SHA}"
+            docker push "${remote_image}:latest"
+          done
 
       - name: Run OWASP ZAP baseline scan
         if: env.APP_BASE_URL != ''

@@ -4,6 +4,7 @@ output "application_url" {
 }
 
 output "instance_id" { value = module.ec2.instance_id }
+output "database_endpoint" { value = module.rds.db_instance_endpoint }
 output "ecr_repositories" { value = module.ecr.repository_urls }
 
 output "database_secret_arn" {

@@ -1,84 +1,70 @@
 # One Man Army: Three-Tier DevSecOps Pipeline
 
-This repository is a starting point for automating a three-tier application with GitHub Actions, Docker, Terraform, Helm, and security reporting. It is not yet a one-click production deployment: the checked-in Terraform currently creates a single public EC2/k3s host, and the Helm chart currently runs MySQL inside Kubernetes. The target design below uses private RDS and a managed Kubernetes control plane, so infrastructure work is still required before enabling CD.
+This repository combines SkillPulse (Go/Gin, MySQL, and a vanilla-JS frontend) with GitHub Actions, Docker, Terraform, Helm, and security reporting.
 
-## Target Architecture
+## Current Deployment
 
-```text
-GitHub Actions
-	PR: app checks -> Docker builds -> Trivy / optional Snyk and Sonar -> Terraform validate -> Helm lint
-	main: repeat checks -> push versioned images to ECR -> Terraform plan/apply (approval) -> Helm deploy -> ZAP DAST
-																						|
-																						v
-												Public ALB / AWS Load Balancer Controller
-																						|
-															EKS managed node groups (EC2/ASG)
-																	 private application subnets
-																						|
-											 private RDS MySQL subnets + Secrets Manager
+Terraform currently creates a public EC2 host running k3s and a MySQL RDS instance in private subnets. Helm deploys the backend and Nginx frontend, initializes the RDS schema on first installation, and routes traffic through k3s Traefik. This is a starter deployment, not the separate production target of EKS, managed node groups, and an ALB. Prometheus/Grafana are not configured yet.
 
-Prometheus + Grafana: installed into EKS with Helm
-Security reports: GitHub Pages (public) and/or Actions artifacts
-```
+Review Terraform plans and costs before applying. The Terraform state files in this repository are sensitive operational data; do not publish them, and migrate to secured remote state before collaborating or using production.
 
-For Kubernetes, prefer EKS with managed node groups over putting one k3s control plane in an EC2 Auto Scaling Group. EKS node groups use EC2 Auto Scaling Groups under management, while the control plane is managed and survives worker replacement. Put worker nodes and RDS in private subnets; expose the app through an internet-facing ALB. Private subnets need outbound access (usually NAT gateways or VPC endpoints) for image pulls and updates.
+## GitHub Actions
 
-## Pipeline Starter
+`.github/workflows/pipeline.yml` runs Go test/vet, builds backend and frontend images, scans both with Trivy, validates Terraform and Helm, and publishes security reports to GitHub Pages on main. Set `PUBLISH_IMAGES=true` to push SHA-tagged and `latest` images to Docker Hub on pushes to main. Optional Snyk, SonarCloud, and OWASP ZAP scans are enabled through repository variables.
 
-The workflow at `.github/workflows/pipeline.yml` runs application checks, builds both Docker images, scans them with Trivy, validates Terraform and Helm, and saves scan outputs as a workflow artifact. On pushes to `main`, it also publishes the generated report page using GitHub Pages. Snyk, SonarCloud, and ZAP steps activate when their corresponding repository variables are configured.
+`.github/workflows/helm-apply.yml` is a manually dispatched Helm deployment. GitHub Actions authenticates to AWS using OIDC and asks Systems Manager to run Helm on the EC2 host; it does not expose the Kubernetes API publicly. The host downloads the selected commit's source archive from GitHub's public codeload endpoint, so private repositories need an authenticated artifact handoff before using this workflow. Terraform apply remains a separate, reviewed manual operation.
 
-The workflow deliberately does not apply Terraform or deploy to a cluster yet. The current infrastructure and chart need to be migrated to the target topology first. For a safe CD flow, use a separate protected GitHub Environment for each environment and require approval for production Terraform apply/deployment.
+### Repository variables
 
-### GitHub configuration
+| Variable              | Purpose                                                  |
+| --------------------- | -------------------------------------------------------- |
+| `AWS_REGION`          | Region containing the deployment EC2 host                |
+| `EC2_INSTANCE_ID`     | EC2 instance ID from `terraform output -raw instance_id` |
+| `PUBLISH_IMAGES`      | Set to `true` to publish images from main                |
+| `BACKEND_IMAGE_REPO`  | Optional backend image repository override               |
+| `FRONTEND_IMAGE_REPO` | Optional frontend image repository override              |
+| `DB_SECRET_NAME`      | Kubernetes secret name; defaults to `app-db`             |
+| `ENABLE_SNYK`         | Set to `true` to enable Snyk                             |
+| `ENABLE_SONAR`        | Set to `true` to enable SonarCloud                       |
+| `SONAR_ORGANIZATION`  | SonarCloud organization key                              |
+| `SONAR_PROJECT_KEY`   | SonarCloud project key                                   |
+| `APP_BASE_URL`        | Enables the passive ZAP scan when set                    |
 
-Set these repository variables:
+### Repository secrets
 
-| Variable             | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `ENABLE_SNYK`        | Set to `true` to enable the Snyk dependency scan                         |
-| `ENABLE_SONAR`       | Set to `true` to enable SonarCloud analysis                              |
-| `SONAR_ORGANIZATION` | SonarCloud organization key                                              |
-| `SONAR_PROJECT_KEY`  | SonarCloud project key                                                   |
-| `APP_BASE_URL`       | Deployed app URL; setting it enables the passive OWASP ZAP baseline scan |
+| Secret               | Purpose                                                             |
+| -------------------- | ------------------------------------------------------------------- |
+| `AWS_ROLE_ARN`       | IAM role trusted for this repository's GitHub Actions OIDC identity |
+| `DOCKERHUB_USERNAME` | Docker Hub username for image publishing/deployment                 |
+| `DOCKERHUB_TOKEN`    | Docker Hub token with image push permission                         |
+| `SNYK_TOKEN`         | Snyk token when that scan is enabled                                |
+| `SONAR_TOKEN`        | SonarCloud token when that scan is enabled                          |
 
-Set these repository secrets only for integrations you enable:
+The Actions IAM role needs narrowly scoped `ssm:SendCommand` and `ssm:GetCommandInvocation` permissions for the target EC2 instance and `AWS-RunShellScript`. The EC2 role needs SSM managed-instance permissions and access to the Secrets Manager database secret. Set an OIDC trust condition for this repository and protect the `dev`/`prod` GitHub Environments. GitHub Pages reports are public and may disclose dependency and vulnerability details.
 
-| Secret        | Purpose          |
-| ------------- | ---------------- |
-| `SNYK_TOKEN`  | Snyk API token   |
-| `SONAR_TOKEN` | SonarCloud token |
+## `go.mod`
 
-GitHub Pages must be enabled with **Build and deployment > Source: GitHub Actions**. The report page is public; it can reveal dependency names and vulnerability details. Do not publish reports containing credentials, private URLs, or customer data. Pull-request runs keep reports as Actions artifacts instead of publishing them.
+[`apps/SkillPulse/backend/go.mod`](apps/SkillPulse/backend/go.mod) is Go's module manifest. It identifies the module path (`github.com/trainwithshubham/skillpulse`), specifies the Go version (`1.26`), and lists direct dependencies such as Gin and the MySQL driver. There is currently no `go.sum` in the checkout. Run `go mod tidy` to resolve dependencies and generate `go.sum`, which contains dependency checksums, then commit it so local, CI, and Docker builds use a reproducible dependency graph.
 
-### AWS authentication for the future deploy stage
+The API health endpoint is `/health`. Its database settings are `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`.
 
-Use GitHub Actions OIDC, not long-lived `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` keys. Create an AWS IAM role whose trust policy restricts `token.actions.githubusercontent.com` to this repository and the protected deployment environment. Grant only the required ECR push, Terraform state/resource, EKS describe, and deployment permissions. Configure the workflow with `id-token: write`, `aws-actions/configure-aws-credentials`, and the role ARN as an environment variable. Do not put AWS credentials in source files or Terraform state.
+## Next Production Steps
 
-The production workflow will also need non-secret configuration such as AWS region, ECR repository names, EKS cluster name, Helm release/namespace, and image tag. Database credentials should be generated/stored in AWS Secrets Manager and mounted or synced into Kubernetes; they should not be GitHub Actions variables.
+1. Move Terraform state to encrypted, versioned S3 with locking and remove any committed state from repository history if it exposes sensitive details.
+2. For a production topology, migrate from the single k3s EC2 host to EKS with managed node groups; add private application subnets, NAT/VPC endpoints, and the AWS Load Balancer Controller/ALB.
+3. Add resource requests/limits, rollout smoke tests, protected environment approvals, and Prometheus/Grafana with persistence and restricted access.
+4. Publish security reports only after deciding they may be public.
 
-## Recommended Build-Out Order
-
-1. Move Terraform state to an encrypted, versioned S3 backend with locking, then remove state files from Git history if they contain infrastructure details or secrets. Rotate any credential that has ever been committed.
-2. Extend Terraform to create public and private subnets across at least two Availability Zones, NAT/VPC endpoints, EKS and managed node groups, ECR, private RDS MySQL, Secrets Manager, IAM roles, and security groups. Add an ALB through the AWS Load Balancer Controller.
-3. Update the Helm chart to use the RDS endpoint instead of deploying its MySQL StatefulSet. Keep DB credentials in a Kubernetes Secret populated from Secrets Manager. Add readiness/liveness probes, resource requests/limits, and ingress configuration.
-4. Add Prometheus/Grafana through a pinned Helm chart (commonly `kube-prometheus-stack`), configure persistence and retention, and restrict dashboard access.
-5. Add a protected deploy workflow: build and push SHA-tagged images to ECR, apply reviewed Terraform changes, run `helm upgrade --install`, wait for rollout, run smoke tests, then run ZAP baseline against the deployed URL. Promote the exact same image digest from dev to prod.
-6. Publish security reports only after deciding they may be public. Keep complete logs as short-retention Actions artifacts as well.
-
-## Current Repository Notes
-
-- `apps/backend` is a small Express API with a MySQL health endpoint. There is currently no automated unit-test script or committed npm lockfile; add tests and commit `package-lock.json` for reproducible installs.
-- `apps/frontend` is a static Nginx page.
-- The Terraform workflows already validate and manually apply infrastructure, but use static AWS credentials and are not a replacement for the application deploy workflow.
-- The existing k3s bootstrap, Terraform and Helm files are an in-progress baseline. Review their state and resource changes before running `terraform apply` or `destroy`.
-
-## Run Checks Locally
+## Local Checks
 
 ```bash
-cd apps/backend
-npm install
-npm test --if-present
-cd ../..
+cd apps/SkillPulse/backend
+go mod tidy
+go test ./...
+go vet ./...
+cd ../../..
+docker build -t skillpulse-backend apps/SkillPulse/backend
+docker build -f apps/SkillPulse/Dockerfile.frontend -t skillpulse-frontend apps/SkillPulse
 helm lint helm/three-tier
 helm template three-tier helm/three-tier --namespace three-tier
 cd terraform
@@ -86,7 +72,3 @@ terraform fmt -check -recursive
 terraform init -backend=false
 terraform validate
 ```
-
-The GitHub Actions workflow runs these checks in CI; local Terraform initialization may update the provider lock file, so review that diff before committing.
-
-ok
