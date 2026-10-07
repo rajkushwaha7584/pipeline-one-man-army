@@ -1,0 +1,110 @@
+name: Helm Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      image_tag:
+        description: Docker image tag to deploy
+        required: true
+        default: latest
+        type: string
+      namespace:
+        description: Kubernetes namespace
+        required: true
+        default: three-tier
+        type: string
+
+jobs:
+  deploy:
+    name: Helm upgrade/install
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.16.4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy via Systems Manager
+        shell: bash
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          TARGET_NAMESPACE: ${{ inputs.namespace }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          BACKEND_IMAGE_REPO: ${{ vars.BACKEND_IMAGE_REPO }}
+          FRONTEND_IMAGE_REPO: ${{ vars.FRONTEND_IMAGE_REPO }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          DB_SECRET_NAME: ${{ vars.DB_SECRET_NAME }}
+        run: |
+          BACKEND_IMAGE_REPO="${BACKEND_IMAGE_REPO:-docker.io/${DOCKERHUB_USERNAME}/skillpulse-backend}"
+          FRONTEND_IMAGE_REPO="${FRONTEND_IMAGE_REPO:-docker.io/${DOCKERHUB_USERNAME}/skillpulse-frontend}"
+          DB_SECRET_NAME="${DB_SECRET_NAME:-app-db}"
+          if [[ "$BACKEND_IMAGE_REPO" == "docker.io//"* || "$FRONTEND_IMAGE_REPO" == "docker.io//"* ]]; then
+            echo "Set DOCKERHUB_USERNAME or both image repository variables." >&2
+            exit 1
+          fi
+          if [[ -z "$EC2_INSTANCE_ID" || -z "$AWS_REGION" ]]; then
+            echo "Set EC2_INSTANCE_ID and AWS_REGION repository variables." >&2
+            exit 1
+          fi
+          if [[ ! "$TARGET_NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ || ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "Invalid namespace or image tag." >&2
+            exit 1
+          fi
+          printf -v namespace_q '%q' "$TARGET_NAMESPACE"
+          printf -v backend_q '%q' "$BACKEND_IMAGE_REPO"
+          printf -v frontend_q '%q' "$FRONTEND_IMAGE_REPO"
+          printf -v tag_q '%q' "$IMAGE_TAG"
+          printf -v db_secret_q '%q' "$DB_SECRET_NAME"
+          remote_command=$(printf '%s\n' \
+            '#!/bin/bash' \
+            'set -euo pipefail' \
+            'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' \
+            'work_dir=$(mktemp -d)' \
+            "curl -fsSL https://codeload.github.com/${GITHUB_REPOSITORY}/tar.gz/${GITHUB_SHA} | tar -xz --strip-components=1 -C \"\$work_dir\"" \
+            "helm upgrade --install three-tier \"\$work_dir/helm/three-tier\" --namespace ${namespace_q} --create-namespace --set-string namespace=${namespace_q} --set-string images.backend=${backend_q} --set-string images.frontend=${frontend_q} --set-string images.tag=${tag_q} --set-string mysql.existingSecret=${db_secret_q} --wait --timeout 10m" \
+            'rm -rf "$work_dir"')
+          parameters=$(jq -n --arg command "$remote_command" '{commands: [$command]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' \
+            --output text)
+          for attempt in {1..120}; do
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$status" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut|Undeliverable|Terminated)
+                aws ssm get-command-invocation --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID" --query StandardErrorContent --output text
+                exit 1
+                ;;
+              *) sleep 5 ;;
+            esac
+          done
+          if [[ "$status" != "Success" ]]; then
+            echo "Timed out waiting for the remote Helm deployment." >&2
+            exit 1
+          fi
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID" --query StandardOutputContent --output text

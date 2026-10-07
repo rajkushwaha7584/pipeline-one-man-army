@@ -1,35 +1,64 @@
-# Terraform local files, state, and provider binaries
-*.terraform/
+# Terraform local state, plans, and provider binaries
+.terraform/
 *.tfstate
 *.tfstate.*
-*.tfstate.backup
-crash.log
 *.tfplan
 *.tfplan.*
-build/
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
+crash.log
+crash.*.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+.terraformrc
+terraform.rc
 
-# Environment and sensitive credentials
+# Environment and credentials
 .env
+.env.*
+!.env.example
+!.env.*.example
 *.pem
 *.key
+*.p12
+*.pfx
 secrets/
+.ssh/
 
-# Backup files and archives
+# Go build and test output
+/bin/
+/build/
+*.exe
+*.test
+coverage.out
+*.coverprofile
+
+# Node dependencies and package-manager logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Generated app and CI output
+/dist/
+/reports/
+*.tmp
+
+# Backups and archives
 *.bak
 *.backup
 backup/
 *.zip
 *.tar.gz
 
-# OS generated files
+# OS and editor files
 .DS_Store
 Thumbs.db
-
-# IDE and editor directories
 .vscode/
 .idea/
 *.swp
