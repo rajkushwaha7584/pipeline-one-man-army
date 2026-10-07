@@ -1,6 +1,6 @@
 output "application_url" {
-  description = "Starter application URL after the Helm deployment completes"
-  value       = "http://${module.ec2.public_ip}"
+  description = "Public application URL after the Helm deployment completes"
+  value       = module.alb_asg.application_url
 }
 
 output "instance_id" { value = module.ec2.instance_id }

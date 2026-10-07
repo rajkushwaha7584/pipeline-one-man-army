@@ -49,6 +49,10 @@ resource "aws_subnet" "private" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.this.id
+  }
   tags   = { Name = "${var.project_name}-${var.environment}-private-rt" }
 }
 
@@ -56,4 +60,39 @@ resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { Name = "${var.project_name}-${var.environment}-nat" }
+}
+
+resource "aws_nat_gateway" "this" {
+  allocation_id     = aws_eip.nat.id
+  subnet_id         = aws_subnet.public[0].id
+  connectivity_type = "public"
+  depends_on        = [aws_internet_gateway.this]
+  tags              = { Name = "${var.project_name}-${var.environment}-nat" }
+}
+
+resource "aws_security_group" "alb" {
+  name        = "${var.project_name}-${var.environment}-alb-sg"
+  description = "Public HTTP entry point for the application load balancer"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project_name}-${var.environment}-alb-sg" }
 }

@@ -1,2 +1,2 @@
-# This module is intentionally not active yet. Its resources are commented out
-# in main.tf, so outputs are omitted until those resources are enabled.
+output "dns_name" { value = aws_lb.this.dns_name }
+output "application_url" { value = "http://${aws_lb.this.dns_name}" }

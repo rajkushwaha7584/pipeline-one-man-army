@@ -4,9 +4,9 @@ This repository combines SkillPulse (Go/Gin, MySQL, and a vanilla-JS frontend) w
 
 ## Current Deployment
 
-Terraform currently creates a public EC2 host running k3s and a MySQL RDS instance in private subnets. Helm deploys the backend and Nginx frontend, initializes the RDS schema on first installation, and routes traffic through k3s Traefik. This is a starter deployment, not the separate production target of EKS, managed node groups, and an ALB. Prometheus/Grafana are not configured yet.
+Terraform currently creates a public ALB, a private EC2 host running k3s, and a MySQL RDS instance in private subnets. The EC2 host accepts application traffic only from the ALB and has no public IP; a NAT gateway provides private-subnet outbound access for bootstrap and updates. Helm deploys the backend and Nginx frontend, initializes the RDS schema on first installation, and routes traffic through k3s Traefik. This is still a single-host starter, not the production target of EKS and managed node groups. Prometheus/Grafana are not configured yet.
 
-Review Terraform plans and costs before applying. The Terraform state files in this repository are sensitive operational data; do not publish them, and migrate to secured remote state before collaborating or using production.
+Review Terraform plans and costs before applying. A NAT gateway, ALB, and RDS add ongoing AWS charges. The Terraform state files in this repository are sensitive operational data; do not publish them, and migrate to secured remote state before collaborating or using production.
 
 ## GitHub Actions
 
@@ -51,7 +51,7 @@ The API health endpoint is `/health`. Its database settings are `DB_HOST`, `DB_P
 ## Next Production Steps
 
 1. Move Terraform state to encrypted, versioned S3 with locking and remove any committed state from repository history if it exposes sensitive details.
-2. For a production topology, migrate from the single k3s EC2 host to EKS with managed node groups; add private application subnets, NAT/VPC endpoints, and the AWS Load Balancer Controller/ALB.
+2. For a production topology, migrate from the single k3s EC2 host to EKS with managed node groups and configure the AWS Load Balancer Controller.
 3. Add resource requests/limits, rollout smoke tests, protected environment approvals, and Prometheus/Grafana with persistence and restricted access.
 4. Publish security reports only after deciding they may be public.
 

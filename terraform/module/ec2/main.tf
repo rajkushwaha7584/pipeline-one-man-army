@@ -10,19 +10,13 @@ data "aws_ami" "amazon_linux" {
 resource "aws_security_group" "k3s_host" {
   name_prefix = "${var.project_name}-${var.environment}-k3s-"
   vpc_id      = var.vpc_id
-  description = "Public web access only; host administration is through SSM"
+  description = "Application HTTP is allowed only from the public ALB; administration uses SSM"
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [var.alb_security_group_id]
   }
   egress {
     from_port   = 0
@@ -38,7 +32,7 @@ resource "aws_instance" "this" {
   subnet_id                   = var.subnet_id
   key_name                    = var.key_name
   iam_instance_profile        = var.iam_instance_profile
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   vpc_security_group_ids      = [aws_security_group.k3s_host.id]
   user_data = templatefile("${path.module}/k3s-bootstrap.sh.tftpl", {
     aws_region           = var.aws_region

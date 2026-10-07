@@ -38,18 +38,29 @@ module "iam" {
 }
 
 module "ec2" {
-  source               = "./module/ec2"
-  project_name         = var.project_name
-  environment          = var.environment
-  vpc_id               = module.vpc.vpc_id
-  subnet_id            = module.vpc.public_subnet_ids[0]
-  instance_type        = var.instance_type
-  key_name             = var.key_name
-  iam_instance_profile = module.iam.instance_profile_name
-  database_secret_name = aws_secretsmanager_secret.database.name
-  mysql_volume_size    = var.mysql_volume_size
-  aws_region           = var.aws_region
-  depends_on           = [aws_secretsmanager_secret_version.database]
+  source                = "./module/ec2"
+  project_name          = var.project_name
+  environment           = var.environment
+  vpc_id                = module.vpc.vpc_id
+  subnet_id             = module.vpc.private_subnet_ids[0]
+  alb_security_group_id = module.vpc.alb_security_group_id
+  instance_type         = var.instance_type
+  key_name              = var.key_name
+  iam_instance_profile  = module.iam.instance_profile_name
+  database_secret_name  = aws_secretsmanager_secret.database.name
+  mysql_volume_size     = var.mysql_volume_size
+  aws_region            = var.aws_region
+  depends_on            = [aws_secretsmanager_secret_version.database]
+}
+
+module "alb_asg" {
+  source                 = "./module/alb_asg"
+  project_name           = var.project_name
+  environment            = var.environment
+  vpc_id                 = module.vpc.vpc_id
+  public_subnet_ids      = module.vpc.public_subnet_ids
+  alb_security_group_id  = module.vpc.alb_security_group_id
+  target_instance_id     = module.ec2.instance_id
 }
 
 module "rds" {

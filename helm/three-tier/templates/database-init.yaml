@@ -25,10 +25,18 @@ spec:
   backoffLimit: 6
   template:
     spec:
+      automountServiceAccountToken: false
       restartPolicy: OnFailure
       containers:
         - name: initialize-schema
           image: mysql:8.4
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
           command: ["/bin/sh", "-ec"]
           args:
             - |
