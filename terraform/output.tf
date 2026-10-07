@@ -1,9 +1,10 @@
 output "application_url" {
-  description = "Starter application URL after the Helm deployment completes"
-  value       = "http://${module.ec2.public_ip}"
+  description = "Public application URL after the Helm deployment completes"
+  value       = module.alb_asg.application_url
 }
 
 output "instance_id" { value = module.ec2.instance_id }
+output "database_endpoint" { value = module.rds.db_instance_endpoint }
 output "ecr_repositories" { value = module.ecr.repository_urls }
 
 output "database_secret_arn" {
