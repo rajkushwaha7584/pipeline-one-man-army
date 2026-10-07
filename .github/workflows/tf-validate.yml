@@ -1,0 +1,61 @@
+name: "1. Infra - Validate & Security"
+
+on:
+  pull_request:
+    branches:
+      - main
+      - terra
+    paths:
+      - "terraform/**"
+      - ".github/workflows/tf-validate.yml"
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: "Validate & Format"
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.15.1"
+
+      - name: Show Terraform Version
+        run: terraform version
+
+      - name: Check Terraform Formatting
+        run: terraform fmt -check -diff -recursive
+
+      - name: Terraform Init
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+  security-scan:
+    name: "Security Scan (Trivy)"
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Run Trivy Scanner on Terraform Code
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master
+        with:
+          scan-type: "config"
+          scan-ref: "./terraform"
+          format: "table"
+          exit-code: "0"

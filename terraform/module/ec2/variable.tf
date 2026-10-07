@@ -1,37 +1,18 @@
-variable "project_name" {
-  description = "Name of the project"
-  type        = string
-}
-
-variable "environment" {
-  description = "Deployment environment (e.g., dev, prod)"
-  type        = string
-}
-
-variable "vpc_id" {
-  description = "VPC ID where the security group will be created"
-  type        = string
-}
-
-variable "subnet_id" {
-  description = "The Subnet ID to deploy the EC2 instance into"
-  type        = string
-}
-
-variable "instance_type" {
-  description = "EC2 instance size"
-  type        = string
-  default     = "t3.micro"
-}
-
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "vpc_id" { type = string }
+variable "subnet_id" { type = string }
+variable "alb_security_group_id" { type = string }
+variable "instance_type" { type = string }
 variable "key_name" {
-  description = "SSH key pair name"
-  type        = string
-  default     = "user1"
+  type     = string
+  default  = null
+  nullable = true
 }
-
-variable "enable_public_ip" {
-  description = "Whether to assign a public IP (Set to true if in public subnet)"
-  type        = bool
-  default     = false
+variable "iam_instance_profile" { type = string }
+variable "database_secret_name" { type = string }
+variable "mysql_volume_size" { type = number }
+variable "aws_region" {
+  type    = string
+  default = "ap-south-1"
 }

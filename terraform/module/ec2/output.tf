@@ -1,19 +1,3 @@
-output "instance_id" {
-  description = "The ID of the EC2 instance"
-  value       = module.ec2_instance.id
-}
-
-output "instance_public_ip" {
-  description = "The public IP of the EC2 instance"
-  value       = module.ec2_instance.public_ip
-}
-
-output "instance_private_ip" {
-  description = "The private IP of the EC2 instance"
-  value       = module.ec2_instance.private_ip
-}
-
-output "security_group_id" {
-  description = "The ID of the security group"
-  value       = module.ec2_instance.security_group_id
-}
+output "instance_id" { value = aws_instance.this.id }
+output "private_ip" { value = aws_instance.this.private_ip }
+output "mysql_volume_id" { value = aws_ebs_volume.mysql.id }

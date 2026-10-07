@@ -1,0 +1,29 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf install -y docker jq awscli
+systemctl enable --now docker
+
+# The second EBS volume is mounted where k3s local-path stores PVC data.
+for i in {1..60}; do
+  device=$(lsblk -ndo PATH,TYPE | awk '$2 == "disk" { print $1 }' | tail -n 1)
+  [ -n "$device" ] && [ "$device" != "/dev/nvme0n1" ] && break
+  sleep 5
+done
+
+mkdir -p /var/lib/rancher/k3s/storage
+if ! blkid "$device" >/dev/null 2>&1; then mkfs -t xfs "$device"; fi
+echo "$device /var/lib/rancher/k3s/storage xfs defaults,nofail 0 2" >> /etc/fstab
+mount -a
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644" sh -
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+until kubectl get nodes >/dev/null 2>&1; do sleep 5; done
+secret=$(aws secretsmanager get-secret-value --region ${aws_region} --secret-id ${database_secret_name} --query SecretString --output text)
+kubectl create namespace three-tier --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n three-tier create secret generic app-db \
+  --from-literal=db-host="$(jq -r .db_host <<< "$secret")" \
+  --from-literal=root-password="$(jq -r .root_password <<< "$secret")" \
+  --from-literal=app-password="$(jq -r .app_password <<< "$secret")" \
+  --dry-run=client -o yaml | kubectl apply -f -

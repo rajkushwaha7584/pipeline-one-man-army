@@ -1,0 +1,36 @@
+namespace: three-tier
+
+images:
+  frontend: "one-man-army-frontend"
+  backend: "one-man-army-backend"
+  tag: "latest"
+
+service:
+  frontend:
+    port: 80
+    targetPort: 80
+  backend:
+    port: 8080
+    targetPort: 8080
+  mysql:
+    port: 3306
+
+mysql:
+  enabled: false
+  storage: 20Gi
+  existingSecret: app-db
+  adminUser: dbadmin
+  database: skillpulse
+  user: app
+
+app:
+  name: one-man-army
+  replicas:
+    frontend: 2
+    backend: 2
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
