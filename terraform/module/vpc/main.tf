@@ -53,7 +53,7 @@ resource "aws_route_table" "private" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.this.id
   }
-  tags   = { Name = "${var.project_name}-${var.environment}-private-rt" }
+  tags = { Name = "${var.project_name}-${var.environment}-private-rt" }
 }
 
 resource "aws_route_table_association" "private" {

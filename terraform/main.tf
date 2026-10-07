@@ -54,13 +54,13 @@ module "ec2" {
 }
 
 module "alb_asg" {
-  source                 = "./module/alb_asg"
-  project_name           = var.project_name
-  environment            = var.environment
-  vpc_id                 = module.vpc.vpc_id
-  public_subnet_ids      = module.vpc.public_subnet_ids
-  alb_security_group_id  = module.vpc.alb_security_group_id
-  target_instance_id     = module.ec2.instance_id
+  source                = "./module/alb_asg"
+  project_name          = var.project_name
+  environment           = var.environment
+  vpc_id                = module.vpc.vpc_id
+  public_subnet_ids     = module.vpc.public_subnet_ids
+  alb_security_group_id = module.vpc.alb_security_group_id
+  target_instance_id    = module.ec2.instance_id
 }
 
 module "rds" {
